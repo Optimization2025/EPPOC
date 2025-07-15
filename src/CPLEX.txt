@@ -1,0 +1,472 @@
+#include <ilcplex/ilocplex.h>
+#include <string>
+#include <vector>
+#include <sys/time.h>              /* time */
+#define random(x) (rand()%x)
+
+ILOSTLBEGIN 
+
+
+//input data starts here 
+
+
+//input data ends here
+
+
+
+
+double Investcap=100000*F; 
+
+clock_t t_start,t_end; 
+
+
+vector<vector<vector<double>>> M1(H); 
+double M2; 
+
+
+int VKindex[V][K]; 
+int TVKN=0;
+
+int FHindex[F+1][H]; 
+int TFHN=0;
+
+int HRindex[H][R]; 
+int HROUTES=0;
+
+vector<vector<int>> HNindex(H); 
+int HNODES=0;
+
+vector<vector<int>> HAindex(H); 
+int HARCS=0;
+
+
+vector<vector<vector<int>>> RLNindex(R); 
+vector<vector<vector<int>>> RKNindex(R); 
+int RKNnum[R]; 
+
+int FHROUTES=0;
+int FHRindex[F+1][H][R]; 
+
+int HKNODES=0;
+vector<vector<vector<int>>> HKNindex(H); 
+vector<int> NVindex; 
+vector<vector<double>> RStimes(R); 
+vector<vector<double>> TCtimes(R); 
+
+double flexrate=1.00;
+vector<int> Tlimit; 
+
+
+
+string num2str(double i)
+{    stringstream ss;
+ss<<i;
+return ss.str();}
+
+
+void Timesetup(double therate){ 
+	Tlimit.resize(L,-1);
+	for (int l=0;l!=L;++l){
+	     double thestime=Sertimes[l];
+	     double thettime=Tratimes[l];
+		 double totaltime=thestime+thettime;
+		 Tlimit[l]=ceil(totaltime*therate)-thettime; 
+	}
+}
+
+void CPLEXSETUP(){
+	Timesetup(flexrate); 
+	
+	int counter=0;
+	for (int v=0;v!=V;++v){
+		for (int k=0;k!=K;++k){
+			VKindex[v][k]=counter;
+			counter+=1;
+		}
+	}
+	TVKN=counter;
+	counter=0;
+	for (int f=0;f!=F+1;++f){
+		for (int h=0;h!=H;++h){
+			FHindex[f][h]=counter;
+			counter+=1;
+		}
+	}
+	TFHN=counter;
+	counter=0;
+	for (int h=0;h!=H;++h){
+		for (int r=0;r!=R;++r){
+			HRindex[h][r]=counter;
+			counter+=1;
+		}
+	}
+	HROUTES=counter;
+    counter=0;
+	for (int f=0;f!=F+1;++f){
+		for (int h=0;h!=H;++h){
+			for (int r=0;r!=R;++r){
+			FHRindex[f][h][r]=counter;
+			counter+=1;}
+		}
+	}
+	FHROUTES=counter;
+    counter=0;
+	for (int h=0;h!=H;++h){
+		HKNindex[h].resize(K);
+		for (int k=0;k!=K;++k){
+			HKNindex[h][k].resize(N,-1);
+			for (int n=0;n!=N;++n){
+			HKNindex[h][k][n]=counter;
+			counter+=1;}
+		}
+	}
+	HKNODES=counter; 
+	M2=0;
+	for (int r=0;r!=R;++r){
+		double routecost=VDR*Dcost*RDIS[r]/1000; 
+		M2+=RWT[r]*routecost*double(Gamma);
+	}
+	cout<<"diesile cost="<<M2*F/1000<<endl;
+	for (int h=0;h!=H;++h){
+		M1[h].resize(K);
+		for (int k=0;k!=K;++k){
+			M1[h][k].resize(N,0);
+			for (int l=0;l!=L;++l){
+				for (int nn=0;nn!=LNN[l];++nn){
+					double tct=0; 
+					if (nn==0){
+						tct=Tlimit[l];}
+					else {
+						tct=Tlimit[l]-Sertimes[l];}
+					int orind=LNset[l][nn];
+					double temp=POWER[k]*tct/3600;
+					if (temp>Speed[h]*tct/3600){
+						temp=Speed[h]*tct/3600;
+					}
+					if (temp>Capacity[h]){
+						temp=Capacity[h];
+					}
+					M1[h][k][orind]=temp;
+				}
+			}
+		}
+	}
+	counter=0;
+	NVindex.resize(N,-1);
+	for (int r=0;r!=R;++r){
+		for (int nn=0;nn!=RLEN[r];++nn){
+			int thev=RVset[r][nn];
+			NVindex[counter]=thev;
+			counter+=1;
+		}
+	}
+	counter=0;
+	for (int h=0;h!=H;++h){
+		for (int n=0;n!=N;++n){
+		HNindex[h].resize(n+1,counter);
+		counter+=1;
+		}
+	}
+	HNODES=counter;
+	counter=0;
+	for (int h=0;h!=H;++h){
+		for (int n=0;n!=A;++n){
+		HAindex[h].resize(n+1,counter);
+		counter+=1;
+		}
+	}
+	HARCS=counter;
+}
+
+double Model (double timlim) { 
+	double result=0;
+	IloEnv env; 
+	IloNumVar obj(env, -IloInfinity, IloInfinity, ILOFLOAT);
+	IloNumVarArray y(env, TVKN, 0, 1, ILOINT); 
+	IloNumVarArray x(env, TFHN, 0, 1, ILOINT); 
+	IloNumVarArray z(env, HROUTES, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray u(env, HNODES, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray alpha(env, HNODES, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray beta(env, HNODES, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray mu(env, HARCS, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray nu(env, HARCS, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray gamma(env, HKNODES, 0, IloInfinity, ILOFLOAT); 
+	IloNumVarArray phi(env, TFHN, 0, IloInfinity, ILOFLOAT); 
+	try{
+		
+		IloModel model(env);
+		{   
+			model.add(IloMinimize(env, obj)); 
+		} 
+		{
+			IloExpr Z1(env); 
+			for (int v=0;v!=V;++v){
+				for (int k=0;k!=K;++k){
+					int index=VKindex[v][k];
+					Z1+=C1[v][k]*y[index];  
+				}
+			}
+			IloExpr Z2(env); 
+			for (int f=1;f!=F+1;++f){
+				for (int h=0;h!=H;++h){
+					int index=FHindex[f][h];
+					Z2+=f*C2[h]*x[index];  
+				}
+			}
+			IloExpr Z3(env); 
+			for (int f=1;f!=F+1;++f){
+				for (int h=0;h!=H;++h){
+					int theind=FHindex[f][h];
+					Z3+=f*phi[theind];  
+				}
+			}
+			model.add((Z1+Z2+Z3)/1000==obj);
+			Z1.end();
+			Z2.end();
+			Z3.end();
+		}
+		
+		{ 
+			for (int f=1;f!=F;++f){
+				for (int h=0;h!=H;++h){
+					int index=FHindex[f][h];
+					model.add(x[index]==0);	
+				}
+			}
+			IloExpr sum(env); 
+			for (int h=0;h!=H;++h){
+				int index=FHindex[F][h];
+				sum+=x[index];
+			}
+			model.add(sum==1);	
+			sum.end();
+		}
+		{ 
+			for (int h=0;h!=H;++h){
+				IloExpr sum(env);
+				for (int f=0;f!=F+1;++f){
+					int theind=FHindex[f][h];
+					sum+=x[theind];
+				}
+				model.add(sum==1);
+				sum.end();
+			}
+		}
+		{   
+			for (int v=0;v!=V;++v){
+				IloExpr sum(env);
+				for (int k=0;k!=K;++k){
+					int xind=VKindex[v][k];
+					sum+=y[xind];
+				}
+				model.add(sum<=Setable[v]);
+				sum.end();
+			}
+		}
+		{   
+			IloExpr sum(env);
+			for (int f=0;f!=F+1;++f){
+				for (int h=0;h!=H;++h){
+					int yind=FHindex[f][h];
+					sum+=f*x[yind];
+				}
+			}
+			model.add(sum==F);
+			sum.end();
+		}
+		{  
+			IloExpr sum(env); 
+			for (int v=0;v!=V;++v){
+				for (int k=0;k!=K;++k){
+					int index=VKindex[v][k];
+					sum+=C1[v][k]*y[index];  
+				}
+			}
+			for (int f=1;f!=F+1;++f){
+				for (int h=0;h!=H;++h){
+					int index=FHindex[f][h];
+					sum+=f*C2[h]*x[index];  
+				}
+			}
+			model.add(sum<=Investcap);
+			sum.end();
+		}
+	{ 
+		for (int h=0;h!=H;++h){
+			IloExpr sum(env); 
+			for (int r=0;r!=R;++r){
+				int zind=HRindex[h][r];
+				sum+=RWT[r]*z[zind]*double(Gamma);  
+			}
+			for (int f=1;f!=F+1;++f){
+				int zetaind=FHindex[f][h];
+				int yind=FHindex[f][h];
+				model.add(phi[zetaind]>=sum+M2*(x[yind]-1)); 
+			}
+			sum.end();
+		}
+	}
+		{ 
+			for (int r=0;r!=R;++r){
+				for (int h=0;h!=H;++h){
+					int zind=HRindex[h][r];
+					IloExpr sum(env); 
+					for (int an=0;an!=RLEN[r]-1;++an){
+						int thearc=RAset[r][an];
+						int theind=HAindex[h][thearc];
+						sum+=Ecost*VER*mu[theind]/1000;
+						sum+=Dcost*VDR*nu[theind]/1000;
+					}
+					model.add(z[zind]==sum);
+					sum.end();
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int l=0;l!=L;++l){
+				     int thend=LNset[l][0];
+				     int theind=HNindex[h][thend];
+					 model.add(u[theind]>=Sertimes[l]);
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int l=0;l!=L;++l){
+					IloExpr sum(env); 
+					for (int i=0;i!=LNN[l];++i){
+						int thend=LNset[l][i];
+						int theind=HNindex[h][thend];
+						sum+=u[theind];}
+					model.add(sum<=Tlimit[l]);
+					sum.end();
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int r=0;r!=R;++r){
+					for (int n=0;n!=RLEN[r]-1;++n){
+						int theo=RVset[r][n];
+						int thed=RVset[r][n+1];
+					    int thearc=RAset[r][n];
+						int theind=HAindex[h][thearc];
+						model.add(mu[theind]+nu[theind]==Length[theo][thed]);
+					}
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int r=0;r!=R;++r){
+					int thenode=RNset[r][0];
+					int theind=HNindex[h][thenode];
+					model.add(alpha[theind]==0);  
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int i=0;i!=N;++i){
+				int theind=HNindex[h][i];
+				model.add(alpha[theind]+beta[theind]<=Capacity[h]);
+				} 
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int r=0;r!=R;++r){
+					for (int n=0;n!=RLEN[r]-1;++n){
+						int theo=RNset[r][n];
+						int thed=RNset[r][n+1];
+						int thearc=RAset[r][n];
+						int thearcind=HAindex[h][thearc];
+						int theind01=HNindex[h][theo];
+						int theind02=HNindex[h][thed];
+						model.add(alpha[theind02]==alpha[theind01]+beta[theind01]-VER*mu[thearcind]/1000);
+					}
+				}
+			}
+		}
+		{
+			for (int h=0;h!=H;++h){
+				for (int i=0;i!=N;++i){
+					int theind=HNindex[h][i];
+					model.add(beta[theind]<=Speed[h]*u[theind]/3600);
+				}
+			}
+		}
+		{ 
+			for (int h=0;h!=H;++h){
+				for (int k=0;k!=K;++k){
+					for (int i=0;i!=N;++i){
+					     int gammaind=HKNindex[h][k][i];
+						 int uind=HNindex[h][i];
+						 model.add(gamma[gammaind]<=POWER[k]*u[uind]/3600);
+					}
+				}
+			} 
+		}
+		{ 
+			for (int h=0;h!=H;++h){
+				for (int k=0;k!=K;++k){
+					for (int i=0;i!=N;++i){
+					     int gammaind=HKNindex[h][k][i];
+						 int thev=NVindex[i];
+						 int xind=VKindex[thev][k];
+						 model.add(gamma[gammaind]<=M1[h][k][i]*y[xind]);
+					}
+				}
+			} 
+		}
+		{ 
+			for (int h=0;h!=H;++h){
+				for (int i=0;i!=N;++i){
+					 int bind=HNindex[h][i];
+				     IloExpr sum(env); 
+					 for (int k=0;k!=K;++k){
+						 int gammaind=HKNindex[h][k][i];
+					     sum+=gamma[gammaind];
+					 }
+				     model.add(beta[bind]<=sum);
+					 sum.end();
+				}
+			}
+		}
+		
+		{
+			IloCplex cplex(env);
+			cplex.setParam(IloCplex::Param::TimeLimit,timlim);
+			cplex.setParam(IloCplex::Threads, 1);  
+			cplex.setParam(IloCplex::Param::MIP::Strategy::Search, IloCplex::Traditional);
+			cplex.extract(model);
+			cplex.solve();
+			double thegap=cplex.getMIPRelativeGap();
+			cout<<"thegap="<<thegap<<endl;
+			cout<<"Status="<<cplex.getStatus()<<endl;
+			cout<<"Total cost="<<cplex.getObjValue()<<endl;
+		}
+	}
+	catch(IloException& ex){
+		cerr << ex << endl;
+	}
+	catch(...){
+		cerr << "Error..." << endl;
+	}
+	env.end();
+	return result;
+}
+
+int main(int argc, char **argv)
+{
+	srand(2);
+	srand((int)time(NULL));
+	CPLEXSETUP();
+	struct timeval t_start, t_end;   
+	gettimeofday(&t_start,NULL);
+	Model(86400);
+	gettimeofday(&t_end,NULL);
+	cout <<"Time:"<<((t_end.tv_sec - t_start.tv_sec)*1000000+(t_end.tv_usec - t_start.tv_usec))/double(1000000)<<endl;
+	return 0;
+} 
