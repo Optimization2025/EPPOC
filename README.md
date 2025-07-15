@@ -20,15 +20,10 @@ This repository contains the instances and code used in our paper "Fleet and Inf
   3. BD3: BD3 builds on BD2 by including lower-bound lifting inequalities and subproblem reduction trategies
   4. CPLEX_M1:  CPLEX on model M1 
 
-- List of .h files in the subfolder "inc":
-  1. Selfmath.h:         user-defined c++ library header file for two functions
-
 ## USAGE:
 - To run an algorithm for solving an instance:
-  1. Create a C++ project in Visual Studio;
-  2. Compile C++ project with CPLEX in Concert Technology;
-  3. Load Selfmath.h and the .cpp file of the algorithm into the project;
-  4. Copy the instance data from the "data" folder;
-  5. Load the data into the code for the algorithm between lines "//input data starts here" and "//input data ends here";
-  6. Build and run the code;
-  7. Obtain the results from the console window.
+  1. Compile C++ project with CPLEX in Concert Technology;
+  2. Load Selfmath.h and the .cpp file of the algorithm into the project;
+  3. Copy the instance data from the "data" folder;
+  4. Load the data into the code for the algorithm between lines "//input data starts here" and "//input data ends here";
+  5. Build and run the code;
