@@ -1,5 +1,6 @@
 # EPPOC
 This repository contains the instances and code used in our paper "Fleet and Infrastructure Planning for Heavy-duty Electric Vehicles with Opportunity Charging".
+
 ## INTRODUCTION:
 - Code supplement for the paper "Vessel Service Planning in Seaports".
 
@@ -9,8 +10,9 @@ This repository contains the instances and code used in our paper "Fleet and Inf
 - See how to write C++ applications using CPLEX with Concert Technology (https://www.ibm.com/docs/en/icos/22.1.1?topic=users-creating-c-application-concert-technology). 
 
 ## DATASETS:
-- The instance data are provided in the folder "data". 
-- For a detailed explanation of the instance data, find the "README" file in the folder "data". 
+- The instance data are provided in the folder "data".
+- For a detailed explanation of the instance data, find the "README" file in the folder "data".
+- Detailed computational results are provided in the folder "Detailed Results".
 
 ## CODE:
 - Code of all algorithms used in our computational experiments is provided in the folder "src".
